@@ -141,7 +141,8 @@ public final class MainActivity extends Activity {
         prefixField=field(String.format(Locale.ROOT,"%02X%02X%02X",config.prefix[0],config.prefix[1],config.prefix[2]),"208000");page.addView(prefixField);
         row(button("Guardar configuración",()->saveFields(true)),button("Generar control nuevo",this::newConfig));
         page.addView(text("ATENCIÓN: un ID nuevo normalmente requiere emparejamiento. Eso podría hacer que el controlador antiguo deje de funcionar en algunos modelos.",13,false));
-        page.addView(button("Emparejar (solo si el ventilador está en modo emparejamiento)",this::askPair));
+        page.addView(text("Prepara el ventilador para emparejar y pulsa una sola vez. Se envía inmediatamente, sin ventana de confirmación. El mensaje «Orden enviada» no significa que el ventilador la haya aceptado.",12,false));
+        page.addView(button("Emparejar ahora (1 toque)",this::askPair));
         page.addView(text("Versión inicial: no incluye horarios todavía. Las órdenes se envían únicamente al pulsar un botón.",12,false));
         page.addView(text("Basado en NicoIIT/ha-ble-adv (licencia MIT). No es la aplicación oficial FanLamp Pro.",11,false));
     }
@@ -195,13 +196,9 @@ public final class MainActivity extends Activity {
         send(FanLampCodec.fan(config,speed));
     }
     private void askPair(){
-        new AlertDialog.Builder(this).setTitle("Emparejar con el ventilador")
-            .setMessage("Asegúrate de saber cómo poner tu ventilador en modo emparejamiento. En algunos modelos emparejar uno nuevo puede invalidar el mando existente. No cortes la energía ni cambies ajustes eléctricos desde esta app.")
-            .setNegativeButton("Cancelar",null)
-            .setPositiveButton("Enviar señal",(d,w)->{
-                if(!ready() || !saveFields(false))return;
-                send(FanLampCodec.pair(config));
-            }).show();
+        // Enviar de inmediato: los equipos pueden tener una ventana de emparejamiento breve.
+        if(!ready() || !saveFields(false))return;
+        send(FanLampCodec.pair(config));
     }
     private void send(byte[] payload){
         persist();inform("Se intentará transmitir: "+FanLampCodec.hex(payload));

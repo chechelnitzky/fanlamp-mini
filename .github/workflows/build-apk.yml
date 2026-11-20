@@ -80,11 +80,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.1.0-debug.apk
-          if gh release view v0.1.0 >/dev/null 2>&1; then
-            gh release upload v0.1.0 FanLampMini-v0.1.0-debug.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.1.1-debug.apk
+          if gh release view v0.1.1 >/dev/null 2>&1; then
+            gh release upload v0.1.1 FanLampMini-v0.1.1-debug.apk --clobber
           else
-            gh release create v0.1.0 FanLampMini-v0.1.0-debug.apk \
-              --title "FanLamp Mini v0.1.0 - Prueba BLE" \
-              --notes "APK Android experimental de control Bluetooth sin horarios. Basado en NicoIIT/ha-ble-adv (MIT). Protocolos codificados y probados con vectores; control real de ventilador aún no verificado."
+            gh release create v0.1.1 FanLampMini-v0.1.1-debug.apk \
+              --title "FanLamp Mini v0.1.1 - Prueba BLE" \
+              --notes "APK Android experimental: emparejamiento de 1 toque, sin ventana de confirmación. Basado en NicoIIT/ha-ble-adv (MIT). Control real del ventilador aún no verificado."
           fi
