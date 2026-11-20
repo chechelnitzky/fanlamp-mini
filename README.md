@@ -1,6 +1,12 @@
-# FanLamp Mini 0.4.0
+# FanLamp Mini 0.5.0
 
 Control Android local del ventilador y lámpara compatible con **FanLamp Pro** usando anuncios **Bluetooth Low Energy**. Basado en [NicoIIT/ha-ble-adv](https://github.com/NicoIIT/ha-ble-adv) (MIT), con los perfiles **V3 + V1** reconstruidos del HCI de FanLamp Pro del propietario.
+
+## Cambios de la versión 0.5
+
+- **Todo en una pantalla**: encabezado compacto, luz (encendido, dimmer, tres tonos), ventilador (encendido y velocidad 0–6 con dial adaptable) y acceso a horarios, sin desplazamiento vertical en la pantalla principal. Los ajustes avanzados siguen tras el engranaje.
+- **Firma persistente**: la APK de entrega usa un certificado fijo. Las versiones anteriores 0.3 y 0.4 estaban firmadas con distintas claves de depuración generadas por los runners de GitHub, por lo que **NO es posible actualizar esas versiones directamente**: hay que desinstalar una vez para pasar a la nueva firma. A partir de 0.5, conservar la clave de firma permite instalar 0.6 y posteriores encima sin desinstalar.
+- **Publicación segura**: GitHub Actions ya no publica una APK con firma debug aleatoria. Solo publica releases cuando existen los secretos `FANLAMP_KEYSTORE_B64` y `FANLAMP_KEYSTORE_PASSWORD`, y comprueba que el SHA-256 del certificado coincide con la identidad fija `F04FF09BB97592EE9D4DD92B6A869BF7040E50EB98B064A775C3CB037000F1D7`. Los secretos deben configurarse en *Settings → Secrets and variables → Actions*; el archivo de clave privada **nunca debe subirse al repositorio público**. La firma se conserva fuera del código fuente.
 
 ## Qué cambió
 
@@ -12,8 +18,8 @@ Control Android local del ventilador y lámpara compatible con **FanLamp Pro** u
 
 ## Instalar y usar
 
-1. Descarga `FanLampMini-v0.4.0-debug.apk` desde [Releases](https://github.com/chechelnitzky/fanlamp-mini/releases).
-2. Si Android indica conflicto de firma al actualizar la 0.3, **desinstala solo FanLamp Mini** e instala 0.4; los perfiles capturados vienen integrados. No desinstales FanLamp Pro.
+1. Descarga el APK 0.5 **con firma estable** desde el enlace proporcionado por ChatGPT (o desde Releases cuando se hayan configurado los secretos de firma), no un APK debug de GitHub Actions(https://github.com/chechelnitzky/fanlamp-mini/releases).
+2. Si Android indica conflicto de firma al actualizar la 0.3/0.4, **desinstala solo FanLamp Mini** e instala 0.5; los perfiles capturados vienen integrados. No desinstales FanLamp Pro.
 3. Permite Bluetooth al abrir. En la portada pulsa Luz / Ventilador, ajusta brillo o temperatura. La app presenta **última orden transmitida**, no un estado real leído del ventilador.
 4. En **Ver horarios**, crea una regla y selecciona días, hora y acciones. En Android 12+, si aparece la alerta, concede **Alarmas y recordatorios / horarios exactos** para evitar retrasos de Doze.
 5. Si quieres ver el diagnóstico original, toca el engranaje.
