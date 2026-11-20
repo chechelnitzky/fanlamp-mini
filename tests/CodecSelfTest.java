@@ -45,6 +45,34 @@ public final class CodecSelfTest {
         recoveredV3.txCount=255;
         FanLampCodec.light(recoveredV3,false);
         check(recoveredV3.txCount==0,"8-bit TX counter must wrap 255 to 0");
-        System.out.println("OK: 3 official vectors, captured V3 + V1 exact replay, 8-bit counter rollover");
+        // Exact color/dimmer commands captured from the original FanLamp Pro UI:
+        FanLampCodec.Config warmV3=CapturedControl.v3();
+        warmV3.txCount=25;
+        check(FanLampCodec.hex(FanLampCodec.lightCww(warmV3,0,255)).equals(
+            "F00820823633FD5F5633CB4A1974770F91800041A6C6532BEF5A"),
+            "V3 100% warm light did not reproduce genuine HCI advertisement");
+        FanLampCodec.Config warmV1=CapturedControl.v1();
+        warmV1.txCount=10; warmV1.seed=0xB9;
+        check(FanLampCodec.hex(FanLampCodec.lightCww(warmV1,0,255)).equals(
+            "77F8B65F2B5E00FC31515C1D5208DB0AEBFCD93EF4C8F9AA5DF1"),
+            "V1 100% warm light did not reproduce genuine HCI advertisement");
+        FanLampCodec.Config dimV3=CapturedControl.v3();
+        dimV3.txCount=249;
+        check(FanLampCodec.hex(FanLampCodec.lightCww(dimV3,0,25)).equals(
+            "F008208236D3FD5F5633CB4A1974770F9180E6866CC6532B52E0"),
+            "V3 dimmer 25/255 captured packet mismatch");
+        FanLampCodec.Config dimV1=CapturedControl.v1();
+        dimV1.txCount=234;dimV1.seed=0x5C;
+        check(FanLampCodec.hex(FanLampCodec.lightCww(dimV1,0,25)).equals(
+            "77F8B65F2B5E00FC31515C1D5208BC0AECFC7E99F46F2B8E1C9A"),
+            "V1 dimmer 25/255 captured packet mismatch");
+        for(int temp=0;temp<3;temp++){
+            FanLampCodec.Config x=CapturedControl.v3();
+            FanLampCodec.Decoded d=FanLampCodec.decode(FanLampCodec.lightLevel(x,35,temp));
+            check(d!=null && d.command==0x21 &&
+                (temp==0?d.arg1==0&&d.arg2>0:temp==2?d.arg1>0&&d.arg2==0:d.arg1>0&&d.arg2>0),
+                "Light color mapping roundtrip failed: "+temp);
+        }
+        System.out.println("OK: original vectors + exact captured fan/light/CWW/dimmer packets + counter wrap");
     }
 }
