@@ -96,7 +96,10 @@ jobs:
             --ks-type PKCS12 --ks-key-alias fanlamp-mini \
             --ks-pass env:FANLAMP_KEYSTORE_PASSWORD \
             --out FanLampMini-v0.5.0.apk app/build/outputs/apk/release/app-release-unsigned.apk
-          "$SIGNER" verify --verbose --print-certs FanLampMini-v0.5.0.apk
+          "$SIGNER" verify --verbose --print-certs FanLampMini-v0.5.0.apk | tee /tmp/fanlamp-signature-report.txt
+          grep -Eiq 'f04ff09bb97592ee9d4dd92b6a869bf7040e50eb98b064a775c3cb037000f1d7' /tmp/fanlamp-signature-report.txt || {
+            echo 'ERROR: La firma no coincide con la clave de actualización oficial de FanLamp Mini 0.5.'; exit 1;
+          }
           rm -f "$RUNNER_TEMP/fanlamp-update.p12"
 
       - name: Publicar únicamente la APK firmada con certificado persistente
