@@ -81,7 +81,7 @@ public final class HomeActivity extends Activity {
         scroll.setFillViewport(true);scroll.setBackgroundColor(UiKit.BG);
         LinearLayout root=UiKit.column(this);
         root.setPadding(UiKit.dp(this,20),UiKit.dp(this,22),UiKit.dp(this,20),UiKit.dp(this,38));
-        scroll.addView(root);setContentView(scroll);
+        scroll.addView(root);setContentView(scroll);UiKit.applySafeInsets(root);
 
         LinearLayout head=UiKit.row(this);
         LinearLayout words=UiKit.column(this);
