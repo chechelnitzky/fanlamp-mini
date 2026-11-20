@@ -48,7 +48,7 @@ jobs:
       - name: Comprobar vectores oficiales Bluetooth v1, v2 y v3
         run: |
           mkdir -p tests/build
-          javac -d tests/build app/src/main/java/cl/fanlampmini/FanLampCodec.java tests/CodecSelfTest.java
+          javac -d tests/build app/src/main/java/cl/fanlampmini/FanLampCodec.java app/src/main/java/cl/fanlampmini/CapturedControl.java tests/CodecSelfTest.java
           java -cp tests/build CodecSelfTest
 
       - name: Compilar APK debug
@@ -80,11 +80,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.2.0-debug.apk
-          if gh release view v0.2.0 >/dev/null 2>&1; then
-            gh release upload v0.2.0 FanLampMini-v0.2.0-debug.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.3.0-debug.apk
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            gh release upload v0.3.0 FanLampMini-v0.3.0-debug.apk --clobber
           else
-            gh release create v0.2.0 FanLampMini-v0.2.0-debug.apk \
-              --title "FanLamp Mini v0.2.0 - Prueba BLE" \
-              --notes "APK de diagnóstico BLE: secuencia de emparejamiento V3/V2/V1, prueba de luz por protocolo y escaneo de anuncios con copia local del registro. No confirma que el ventilador reciba órdenes. Basado en NicoIIT/ha-ble-adv (MIT)."
+            gh release create v0.3.0 FanLampMini-v0.3.0-debug.apk \
+              --title "FanLamp Mini v0.3.0 - Control FanLamp Pro recuperado" \
+              --notes "APK v0.3.0: reproduce los dos perfiles V3 y V1 capturados del propio FanLamp Pro, anuncia UUID16 y flags compatibles, y ofrece control de luz y 6 velocidades. La reacción física del ventilador aún debe verificarse. Basado en NicoIIT/ha-ble-adv (MIT)."
           fi
