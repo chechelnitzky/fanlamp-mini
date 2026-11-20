@@ -246,6 +246,16 @@ public final class HomeActivity extends Activity {
         schedulesPreview.setText(s.length()>0?s.toString():"Todos tus horarios están pausados.");
     }
     @Override protected void onResume(){
-        super.onResume();if(schedulesPreview!=null)refreshSchedules();
+        super.onResume();
+        if(state!=null){
+            lightOn=state.getBoolean("light_on",lightOn);
+            brightness=state.getInt("brightness",brightness);
+            temperature=state.getInt("temperature",temperature);
+            fanSpeed=state.getInt("fan_speed",fanSpeed);
+            lastFanSpeed=state.getInt("last_speed",lastFanSpeed);
+        }
+        if(schedulesPreview!=null){
+            refreshLight();refreshFan();refreshSchedules();
+        }
     }
 }
