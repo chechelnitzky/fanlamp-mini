@@ -1,4 +1,5 @@
 import cl.fanlampmini.FanLampCodec;
+import cl.fanlampmini.CapturedControl;
 
 /** Runs with regular javac/java, no Android SDK needed. */
 public final class CodecSelfTest {
@@ -24,6 +25,26 @@ public final class CodecSelfTest {
         check(extracted!=null && extracted.length==26,"Could not extract BLE advertising structure");
         FanLampCodec.Decoded recorded=FanLampCodec.decode(extracted);
         check(recorded!=null && recorded.command==0x11 && recorded.config.id==0xD2135C22L,"Could not decode original V3 packet");
-        System.out.println("OK: 3 official encode vectors, 3 roundtrips, 1 genuine scan packet");
+        // These samples were decoded from the user's own 20 Nov HCI advertising capture.
+        FanLampCodec.Config recoveredV3=CapturedControl.v3();
+        check(recoveredV3.id==0x13A252E5L && recoveredV3.index==3 &&
+              recoveredV3.seed==0x2B53 && recoveredV3.prefix[1]==0x82,
+              "Incorrect recovered real V3 controller identity");
+        recoveredV3.txCount=20; // Captured first ON command was tx=21.
+        check(FanLampCodec.hex(FanLampCodec.light(recoveredV3,true)).equals(CapturedControl.V3_SAMPLE),
+              "Could not reproduce the exact captured V3 packet");
+
+        FanLampCodec.Config recoveredV1=CapturedControl.v1();
+        check(recoveredV1.id==0x00AC50E5L && recoveredV1.index==3,
+              "Incorrect recovered real V1 controller identity");
+        recoveredV1.txCount=5; // Captured first ON command was tx=6.
+        recoveredV1.seed=0x0093;
+        check(FanLampCodec.hex(FanLampCodec.light(recoveredV1,true)).equals(CapturedControl.V1_SAMPLE),
+              "Could not reproduce the exact captured V1 packet");
+
+        recoveredV3.txCount=255;
+        FanLampCodec.light(recoveredV3,false);
+        check(recoveredV3.txCount==0,"8-bit TX counter must wrap 255 to 0");
+        System.out.println("OK: 3 official vectors, captured V3 + V1 exact replay, 8-bit counter rollover");
     }
 }

@@ -35,7 +35,7 @@ public final class BleSender {
         BluetoothLeAdvertiser advertiser=adapter.getBluetoothLeAdvertiser();
         if(advertiser==null){listener.result("El transmisor BLE no está disponible.");return;}
 
-        // 13 UUIDs x 2 bytes = 26 bytes + 2-byte AD header + 3-byte GAP flags = 31-byte legacy limit.
+        // 13 UUIDs x 2 bytes = 26 bytes + 2-byte AD header + 3-byte GAP flags = 31-byte legacy limit.\n        // HCI capture shows legacy connectable advertising with flags 02 01 01, not non-connectable.
         AdvertiseData.Builder data=new AdvertiseData.Builder().setIncludeDeviceName(false).setIncludeTxPowerLevel(false);
         for(int i=0;i<26;i+=2){
             int shortUuid=(payload[i]&255)|((payload[i+1]&255)<<8);
@@ -45,7 +45,7 @@ public final class BleSender {
         AdvertiseSettings settings=new AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-                .setConnectable(false)
+                .setConnectable(true)
                 .setTimeout(0)
                 .build();
 

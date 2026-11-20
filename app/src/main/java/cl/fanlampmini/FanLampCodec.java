@@ -83,7 +83,9 @@ public final class FanLampCodec {
         if (c.index<0 || c.index>255 || c.seed<1 || c.seed>0xFFF5 ||
                 (c.id & ~0xFFFFFFFFL)!=0 || c.prefix.length!=3)
             throw new IllegalArgumentException("Configuración fuera de rango");
-        c.txCount=(c.txCount+1)%125;
+        // The user's HCI capture contains V3 counters 250/251 and V1 counters 235/236.
+        // The packet field is an unsigned byte; previous modulo-125 was incorrect.
+        c.txCount=(c.txCount+1)&0xFF;
         if (c.version==Version.V1) return encodeV1(c,command,arg0,arg1,arg2,param);
         return encodeV2(c,command,arg0,arg1,arg2,param);
     }

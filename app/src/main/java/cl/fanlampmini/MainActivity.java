@@ -51,6 +51,10 @@ public final class MainActivity extends Activity {
     private final java.util.LinkedHashSet<String> scanSeen = new java.util.LinkedHashSet<>();
     private final ArrayList<String> scanSamples = new ArrayList<>();
     private FanLampCodec.Config[] trialProfiles;
+    private FanLampCodec.Config capturedV3, capturedV1;
+    private boolean useCapturedControl, capturedBusy;
+    private TextView capturedInfo;
+    private final java.security.SecureRandom capturedRandom = new java.security.SecureRandom();
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
@@ -59,6 +63,7 @@ public final class MainActivity extends Activity {
         bluetooth=manager==null?null:manager.getAdapter();
         sender=new BleSender(bluetooth);
         readConfig();
+        restoreCaptured();
         draw();
         requestBluetoothPermissions();
     }
@@ -75,6 +80,33 @@ public final class MainActivity extends Activity {
             String[] chunks=prefs.getString("prefix","20 80 00").split(" ");
             if(chunks.length==3){config.prefix=new int[]{Integer.parseInt(chunks[0],16),Integer.parseInt(chunks[1],16),Integer.parseInt(chunks[2],16)};}
         } catch(Exception e){config=FanLampCodec.fresh(FanLampCodec.Version.V3);}
+    }
+    /** Rebuild the two controller IDs from BLE packets recorded from FanLamp Pro. */
+    private void restoreCaptured(){
+        capturedV3=CapturedControl.v3();
+        capturedV1=CapturedControl.v1();
+        capturedV3.txCount=prefs.getInt("captured_tx_v3",251)&255;
+        capturedV1.txCount=prefs.getInt("captured_tx_v1",236)&255;
+        useCapturedControl=prefs.getBoolean("use_captured_control",true);
+        if(useCapturedControl) config=capturedV3.copy();
+    }
+    private void updateCapturedInfo(){
+        if(capturedInfo!=null)capturedInfo.setText(useCapturedControl
+            ? "ACTIVO: señales V3 y V1 con los dos ID reales recuperados de FanLamp Pro. No requiere crear otro ID ni emparejar de nuevo si ese control ya funcionaba."
+            : "MODO MANUAL: se usará solamente el protocolo y los campos de abajo.");
+    }
+    private void activateCapture(){
+        useCapturedControl=true;
+        prefs.edit().putBoolean("use_captured_control",true).apply();
+        config=capturedV3.copy();persist();populate();trialProfiles=null;
+        updateCapturedInfo();
+        inform("Control recuperado activado. Prueba «Luz encender» junto al ventilador.");
+    }
+    private void activateManual(){
+        useCapturedControl=false;
+        prefs.edit().putBoolean("use_captured_control",false).apply();
+        trialProfiles=null;updateCapturedInfo();
+        inform("Modo manual activado. Guarda tus cambios antes de probar.");
     }
     private void persist(){
         prefs.edit().putString("v",config.version.name())
@@ -119,6 +151,11 @@ public final class MainActivity extends Activity {
         status=text("Preparado para probar. No hay conexión confirmada con el ventilador.",14,false);
         status.setTextColor(Color.rgb(35,95,115));page.addView(status);
 
+        section("Control recuperado del informe Bluetooth");
+        capturedInfo=text("",13,false);page.addView(capturedInfo);updateCapturedInfo();
+        row(button("Control capturado",this::activateCapture),button("Modo manual",this::activateManual));
+        page.addView(text("El perfil capturado se utiliza sin emparejar otra vez. Se emiten ambos protocolos, como hizo FanLamp Pro. No existe confirmación de recepción del ventilador.",12,false));
+
         section("1. Control");
         row(button("💡 Luz encender",()->sendLight(true)),button("Luz apagar",()->sendLight(false)));
         page.addView(text("Velocidad del ventilador",15,true));
@@ -152,16 +189,9 @@ public final class MainActivity extends Activity {
         page.addView(text("ATENCIÓN: un ID nuevo normalmente requiere emparejamiento. Eso podría hacer que el controlador antiguo deje de funcionar en algunos modelos.",13,false));
         page.addView(text("Prepara el ventilador para emparejar y pulsa una sola vez. Se envía inmediatamente, sin ventana de confirmación. El mensaje «Orden enviada» no significa que el ventilador la haya aceptado.",12,false));
         page.addView(button("Emparejar ahora (1 toque / protocolo seleccionado)",this::askPair));
-        section("4. Prueba automática (V3 → V2 → V1)");
-        page.addView(text("Pulsa el primer botón justo al restablecer electricidad. La app generará un solo ID de prueba para las tres variantes y enviará 3 órdenes consecutivas. Si la luz parpadea, hubo una reacción; no hay confirmación por Bluetooth. ATENCIÓN: podría reemplazar el emparejamiento anterior de algunos ventiladores.",12,false));
-        page.addView(button("Emparejar V3 + V2 + V1 (1 toque)",this::autoPair));
-        page.addView(button("Probar encendido de luz con V3 + V2 + V1",this::autoLight));
-        row(button("Probar solo V3",()->testVersion(FanLampCodec.Version.V3)),
-            button("Probar solo V2",()->testVersion(FanLampCodec.Version.V2)),
-            button("Probar solo V1",()->testVersion(FanLampCodec.Version.V1)));
-        pairingDetails=text("Sin prueba automática. Probar luz solo después de emparejar; cada variante usa la misma configuración de prueba.",12,false);
-        page.addView(pairingDetails);
-        page.addView(text("Versión de diagnóstico 0.2.0: sin horarios todavía. El escaneo desde este mismo teléfono no permite leer las emisiones de FanLamp Pro en ese teléfono.",12,false));
+        section("4. Diagnóstico");
+        page.addView(text("El modo capturado ya conoce los perfiles V3 y V1 del control utilizado por FanLamp Pro. Si no responde, revisa en el sistema que Bluetooth esté autorizado y conserva un nuevo bugreport para comparar los anuncios salientes.",12,false));
+        page.addView(text("Versión 0.3.0 · El control real se debe confirmar observando el ventilador.",12,false));
         page.addView(text("Basado en NicoIIT/ha-ble-adv (licencia MIT). No es la aplicación oficial FanLamp Pro.",11,false));
     }
     private boolean saveFields(boolean show){
@@ -187,7 +217,7 @@ public final class MainActivity extends Activity {
             config.id=ident;config.index=ix;config.seed=se;
             config.prefix=new int[]{Integer.parseInt(prefix.substring(0,2),16),Integer.parseInt(prefix.substring(2,4),16),Integer.parseInt(prefix.substring(4,6),16)};
             prefixField.setText(prefix);
-            persist();if(show)inform("Configuración guardada.");return true;
+            persist();if(show){activateManual();inform("Configuración manual guardada.");}return true;
         }catch(Exception e){inform("Revisa los datos: "+e.getMessage());return false;}
     }
     private void populate(){
@@ -202,18 +232,60 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Cancelar",null)
             .setPositiveButton("Generar",(d,w)->{
                 FanLampCodec.Version v=protocol.getSelectedItemPosition()==0?FanLampCodec.Version.V3:protocol.getSelectedItemPosition()==1?FanLampCodec.Version.V2:FanLampCodec.Version.V1;
-                config=FanLampCodec.fresh(v);persist();populate();inform("Nuevo control creado. Todavía NO está emparejado.");
+                config=FanLampCodec.fresh(v);persist();populate();activateManual();inform("Nuevo control creado. Todavía NO está emparejado.");
             }).show();
     }
     private void sendLight(boolean on){
-        if(!ready() || !saveFields(false))return;
+        if(!ready())return;
+        if(useCapturedControl){sendCaptured(true,on?1:0);return;}
+        if(!saveFields(false))return;
         send(FanLampCodec.light(config,on));
     }
     private void sendFan(int speed){
-        if(!ready() || !saveFields(false))return;
+        if(!ready())return;
+        if(useCapturedControl){sendCaptured(false,speed);return;}
+        if(!saveFields(false))return;
         send(FanLampCodec.fan(config,speed));
     }
+    /**
+     * FanLamp Pro emitted a V3 ad followed by a V1 ad on each observed action.
+     * Each has its OWN controller ID. Do not send a new pair command or use one
+     * identifier for both formats. BLE advertising is broadcast with no ACK.
+     */
+    private void sendCaptured(boolean light,int value){
+        if(sequenceRunning||capturedBusy){
+            inform("Hay una secuencia Bluetooth en curso.");return;
+        }
+        capturedV1.seed=1+capturedRandom.nextInt(255); // V1 uses a fresh 8-bit seed per packet.
+        final byte[] v3=light?FanLampCodec.light(capturedV3,value==1):FanLampCodec.fan(capturedV3,value);
+        final byte[] v1=light?FanLampCodec.light(capturedV1,value==1):FanLampCodec.fan(capturedV1,value);
+        prefs.edit().putInt("captured_tx_v3",capturedV3.txCount)
+            .putInt("captured_tx_v1",capturedV1.txCount).apply();
+        capturedBusy=true;
+        inform("Enviando protocolo FanLamp Pro V3...");
+        sender.send(v3,450,msg->runOnUiThread(()->{
+            if(!capturedBusy)return;
+            if(msg.startsWith("Orden enviada")){
+                handler.postDelayed(()->sender.send(v1,450,msg2->runOnUiThread(()->{
+                    if(!capturedBusy)return;
+                    if(msg2.startsWith("Orden enviada")){
+                        capturedBusy=false;
+                        inform("Emitidos V3 y V1 con IDs capturados. Comprueba la reacción del ventilador; BLE no confirma recepción.");
+                    } else if(msg2.startsWith("Bluetooth está transmitiendo")){
+                        inform("Enviando protocolo FanLamp Pro V1...");
+                    } else {
+                        capturedBusy=false;inform("Error al enviar V1: "+msg2);
+                    }
+                })),90);
+            } else if(msg.startsWith("Bluetooth está transmitiendo")){
+                inform("Enviando protocolo FanLamp Pro V3...");
+            } else {
+                capturedBusy=false;inform("Error al enviar V3: "+msg);
+            }
+        }));
+    }
     private void askPair(){
+        if(useCapturedControl){inform("El control capturado ya tiene ID; no necesitas emparejar de nuevo. Para usar otro ID, pasa a modo manual.");return;}
         // Enviar de inmediato: los equipos pueden tener una ventana de emparejamiento breve.
         if(!ready() || !saveFields(false))return;
         send(FanLampCodec.pair(config));
@@ -347,7 +419,7 @@ public final class MainActivity extends Activity {
         if(scanSamples.isEmpty()){inform("Primero escanea las señales BLE durante 25 segundos.");return;}
         ClipboardManager clipboard=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
         if(clipboard==null)return;
-        String diagnostic="FanLamp Mini 0.2.0. "+bleTotal+" anuncios / "+bleUnique+" contenidos distintos.\n"+
+        String diagnostic="FanLamp Mini 0.3.0. "+bleTotal+" anuncios / "+bleUnique+" contenidos distintos.\n"+
                 android.text.TextUtils.join("\n",scanSamples);
         clipboard.setPrimaryClip(ClipData.newPlainText("BLE diagnóstico (revisar antes de compartir)",diagnostic));
         inform("Diagnóstico copiado. Revísalo antes de compartirlo; puede incluir identificadores de dispositivos cercanos.");
@@ -387,7 +459,7 @@ public final class MainActivity extends Activity {
                             .setMessage("Detecté un paquete FanLamp. ¿Quieres reutilizar este ID y esta clave? Hazlo solo si procede de un control que ya maneja TU ventilador.")
                             .setNegativeButton("No",null)
                             .setPositiveButton("Usar datos",(d,w)->{
-                                config=found.config;persist();populate();trialProfiles=null;
+                                config=found.config;persist();populate();trialProfiles=null;activateManual();
                                 inform("Datos cargados desde un anuncio BLE.");
                             }).show();
                     }
@@ -420,7 +492,7 @@ public final class MainActivity extends Activity {
             }
             FanLampCodec.Decoded decoded=FanLampCodec.decode(data);
             if(decoded==null){inform("No se reconoció un anuncio válido FanLamp V1/V2/V3 (26 bytes). ");return;}
-            config=decoded.config;persist();populate();detected.setText("Importado: "+FanLampCodec.hexId(config.id));
+            config=decoded.config;persist();populate();activateManual();detected.setText("Importado: "+FanLampCodec.hexId(config.id));
             inform("Configuración extraída del paquete.");
         }catch(Exception e){inform("HEX inválido: "+e.getMessage());}
     }
