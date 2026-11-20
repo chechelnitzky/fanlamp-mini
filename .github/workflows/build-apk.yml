@@ -22,6 +22,7 @@ jobs:
             cat bundle/part01.txt bundle/part02.txt bundle/part03.txt bundle/part04.txt bundle/part04b.txt bundle/part05.txt | base64 --decode > /tmp/fanlamp-source.tar.xz
             echo "645c3267e50f03750b289da3a8d6b5cbf8b752c17d476681e952355c42e279d2  /tmp/fanlamp-source.tar.xz" | sha256sum --check
             tar -xJf /tmp/fanlamp-source.tar.xz
+            sed -i 's/b.setTextAllCaps(false)/b.setAllCaps(false)/' app/src/main/java/cl/fanlampmini/MainActivity.java
           fi
 
       - name: Configurar Java 17
