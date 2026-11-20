@@ -22,6 +22,10 @@ public final class BleSender {
     public BleSender(BluetoothAdapter adapter) {this.adapter=adapter;}
 
     public void send(byte[] payload, Listener listener) {
+        send(payload,1100,listener);
+    }
+
+    public void send(byte[] payload, int durationMs, Listener listener) {
         if(busy){listener.result("Hay una orden Bluetooth en curso; intenta nuevamente.");return;}
         if(payload==null || payload.length!=26){listener.result("Error: longitud del paquete inválida.");return;}
         if(adapter==null || !adapter.isEnabled()){listener.result("Activa Bluetooth primero.");return;}
@@ -49,7 +53,7 @@ public final class BleSender {
         running=new AdvertiseCallback(){
             @Override public void onStartSuccess(AdvertiseSettings actualSettings){
                 listener.result("Bluetooth está transmitiendo. Comprueba si respondió el ventilador.");
-                handler.postDelayed(()->stop(advertiser,listener),1100);
+                handler.postDelayed(()->stop(advertiser,listener),Math.max(250,Math.min(3000,durationMs)));
             }
             @Override public void onStartFailure(int errorCode){
                 busy=false;running=null;

@@ -10,6 +10,8 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -42,9 +44,13 @@ public final class MainActivity extends Activity {
     private FanLampCodec.Config config;
     private Spinner protocol;
     private EditText idField,indexField,seedField,prefixField,rawField;
-    private TextView status, detected;
+    private TextView status, detected, scanDetails, pairingDetails;
     private LinearLayout page;
-    private boolean scanning;
+    private boolean scanning, sequenceRunning;
+    private int bleTotal, bleUnique;
+    private final java.util.LinkedHashSet<String> scanSeen = new java.util.LinkedHashSet<>();
+    private final ArrayList<String> scanSamples = new ArrayList<>();
+    private FanLampCodec.Config[] trialProfiles;
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
@@ -121,9 +127,12 @@ public final class MainActivity extends Activity {
 
         section("2. Identificación del control");
         page.addView(text("Primero intenta capturar un paquete de un control cercano. Alternativamente puedes emparejar un identificador de prueba con tu ventilador.",13,false));
-        row(button("Buscar comandos BLE",this::toggleScan),button("Pegar paquete HEX",this::parsePasted));
-        rawField=field("","Anuncio BLE HEX de 26 bytes (opcional)");page.addView(rawField);
-        detected=text("No se han detectado comandos compatibles.",13,false);page.addView(detected);
+        row(button("Escanear señales BLE (25 s)",this::toggleScan),button("Copiar diagnóstico",this::copyScanDetails));
+        page.addView(text("El escáner muestra anuncios BLE cercanos aunque no sean compatibles. El ventilador normalmente NO aparece, porque solo recibe señales. Un control físico podría ser RF o usar otro protocolo.",12,false));
+        detected=text("Sin iniciar escaneo.",13,false);page.addView(detected);
+        scanDetails=text("Sin datos todavía.",11,false);scanDetails.setTextIsSelectable(true);page.addView(scanDetails);
+        rawField=field("","Anuncio BLE HEX (opcional)");page.addView(rawField);
+        page.addView(button("Interpretar paquete HEX",this::parsePasted));
 
         section("3. Datos del protocolo");
         page.addView(text("Variante FanLamp Pro",13,false));
@@ -142,8 +151,17 @@ public final class MainActivity extends Activity {
         row(button("Guardar configuración",()->saveFields(true)),button("Generar control nuevo",this::newConfig));
         page.addView(text("ATENCIÓN: un ID nuevo normalmente requiere emparejamiento. Eso podría hacer que el controlador antiguo deje de funcionar en algunos modelos.",13,false));
         page.addView(text("Prepara el ventilador para emparejar y pulsa una sola vez. Se envía inmediatamente, sin ventana de confirmación. El mensaje «Orden enviada» no significa que el ventilador la haya aceptado.",12,false));
-        page.addView(button("Emparejar ahora (1 toque)",this::askPair));
-        page.addView(text("Versión inicial: no incluye horarios todavía. Las órdenes se envían únicamente al pulsar un botón.",12,false));
+        page.addView(button("Emparejar ahora (1 toque / protocolo seleccionado)",this::askPair));
+        section("4. Prueba automática (V3 → V2 → V1)");
+        page.addView(text("Pulsa el primer botón justo al restablecer electricidad. La app generará un solo ID de prueba para las tres variantes y enviará 3 órdenes consecutivas. Si la luz parpadea, hubo una reacción; no hay confirmación por Bluetooth. ATENCIÓN: podría reemplazar el emparejamiento anterior de algunos ventiladores.",12,false));
+        page.addView(button("Emparejar V3 + V2 + V1 (1 toque)",this::autoPair));
+        page.addView(button("Probar encendido de luz con V3 + V2 + V1",this::autoLight));
+        row(button("Probar solo V3",()->testVersion(FanLampCodec.Version.V3)),
+            button("Probar solo V2",()->testVersion(FanLampCodec.Version.V2)),
+            button("Probar solo V1",()->testVersion(FanLampCodec.Version.V1)));
+        pairingDetails=text("Sin prueba automática. Probar luz solo después de emparejar; cada variante usa la misma configuración de prueba.",12,false);
+        page.addView(pairingDetails);
+        page.addView(text("Versión de diagnóstico 0.2.0: sin horarios todavía. El escaneo desde este mismo teléfono no permite leer las emisiones de FanLamp Pro en ese teléfono.",12,false));
         page.addView(text("Basado en NicoIIT/ha-ble-adv (licencia MIT). No es la aplicación oficial FanLamp Pro.",11,false));
     }
     private boolean saveFields(boolean show){
@@ -230,43 +248,167 @@ public final class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode,permissions,grants);
         if(requestCode==7){inform(hasPermissions()?"Permisos Bluetooth autorizados.":"Necesitas autorizar Bluetooth en Ajustes para usar esta app.");}
     }
+    // Serial commands: BLE Advertiser can only transmit one legacy payload at a time.
+    private static final FanLampCodec.Version[] ORDER={
+        FanLampCodec.Version.V3, FanLampCodec.Version.V2, FanLampCodec.Version.V1
+    };
+    private FanLampCodec.Config makeProfile(FanLampCodec.Version v) {
+        FanLampCodec.Config c=config.copy();
+        c.version=v;
+        c.signed=v==FanLampCodec.Version.V3;
+        c.prefix=v==FanLampCodec.Version.V3?new int[]{0x20,0x80,0}:new int[]{0x10,0x80,0};
+        // The V1 encoder only uses the lowest 24 bits and a 4-bit index.
+        if(v==FanLampCodec.Version.V1){c.id &= 0x00FFFFFFL;c.index &= 0x0F;}
+        return c;
+    }
+    private void profilesFromCurrent(){
+        trialProfiles=new FanLampCodec.Config[]{makeProfile(ORDER[0]),makeProfile(ORDER[1]),makeProfile(ORDER[2])};
+    }
+    private void autoPair(){
+        if(sequenceRunning){inform("Ya está funcionando una secuencia Bluetooth.");return;}
+        if(!ready())return;
+        // All three codecs must share the SAME control ID, as in the original FanLamp Pro app.
+        // Generate a V1-compatible ID (24 bits) so a single ID works with all three.
+        FanLampCodec.Config shared=FanLampCodec.fresh(FanLampCodec.Version.V1);
+        shared.version=FanLampCodec.Version.V3;
+        shared.signed=true;
+        shared.prefix=new int[]{0x20,0x80,0};
+        config=shared;persist();populate();
+        profilesFromCurrent();
+        pairingDetails.setText("Nuevo control de prueba ID "+FanLampCodec.hexId(config.id)+". Intentando 3 protocolos. Si el ventilador responde, conserva este ID.");
+        sequenceRunning=true;
+        cycle(0,true);
+    }
+    private void autoLight(){
+        if(sequenceRunning){inform("Ya está funcionando una secuencia Bluetooth.");return;}
+        if(!ready())return;
+        if(trialProfiles==null){
+            if(!saveFields(false))return;
+            profilesFromCurrent();
+        }
+        sequenceRunning=true;
+        pairingDetails.setText("Probando encendido de la luz con V3, V2 y V1. Si responde, usa los botones individuales para averiguar cuál fue.");
+        cycle(0,false);
+    }
+    private void testVersion(FanLampCodec.Version v){
+        if(sequenceRunning){inform("Espera a que termine la prueba automática.");return;}
+        if(!ready())return;
+        if(trialProfiles==null){
+            if(!saveFields(false))return;
+            profilesFromCurrent();
+        }
+        FanLampCodec.Config chosen=null;
+        for(FanLampCodec.Config c:trialProfiles)if(c.version==v){chosen=c;break;}
+        if(chosen==null)return;
+        config=chosen.copy();persist();populate();
+        pairingDetails.setText("Enviando «Luz encender» SOLO con "+v+". Si responde, esta es la variante que debes usar.");
+        send(FanLampCodec.light(config,true));
+        for(int i=0;i<trialProfiles.length;i++)if(trialProfiles[i].version==v)trialProfiles[i]=config.copy();
+    }
+    private void cycle(int pos,boolean pairing){
+        if(!sequenceRunning)return;
+        if(pos>=ORDER.length){
+            sequenceRunning=false;
+            pairingDetails.setText(pairing?"Enviadas 3 variantes de emparejamiento. El ventilador no confirma cuál aceptó; prueba los botones «Probar solo V3/V2/V1».":
+                    "Se enviaron 3 órdenes de encender luz. Si una funcionó, prueba cada variante individual para identificarla.");
+            inform("Secuencia terminada (sin confirmación del ventilador).");
+            return;
+        }
+        FanLampCodec.Config c=trialProfiles[pos];
+        String label=(pairing?"Emparejando ":"Luz ON ")+c.version+" ("+(pos+1)+"/3)";
+        pairingDetails.setText(label+" · protocolo BLE ADV");
+        byte[] packet=pairing?FanLampCodec.pair(c):FanLampCodec.light(c,true);
+        sender.send(packet,750,msg->runOnUiThread(()->{
+            if(!sequenceRunning)return;
+            if(msg.startsWith("Orden enviada")){
+                handler.postDelayed(()->cycle(pos+1,pairing),120);
+            }else if(msg.startsWith("Bluetooth está transmitiendo")){
+                inform(label+" — enviando anuncio...");
+            }else{
+                sequenceRunning=false;
+                pairingDetails.setText("Error en "+c.version+": "+msg);
+                inform("Secuencia interrumpida: "+msg);
+            }
+        }));
+    }
+    private String adTypes(byte[] raw){
+        if(raw==null)return "?";
+        StringBuilder sb=new StringBuilder();
+        for(int i=0;i<raw.length;){
+            int len=raw[i]&255;
+            if(len==0||i+len>=raw.length)break;
+            if(sb.length()>0)sb.append(",");
+            sb.append(String.format(Locale.ROOT,"%02X",raw[i+1]&255));
+            i+=len+1;
+        }
+        return sb.toString();
+    }
+    private void copyScanDetails(){
+        if(scanSamples.isEmpty()){inform("Primero escanea las señales BLE durante 25 segundos.");return;}
+        ClipboardManager clipboard=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
+        if(clipboard==null)return;
+        String diagnostic="FanLamp Mini 0.2.0. "+bleTotal+" anuncios / "+bleUnique+" contenidos distintos.\n"+
+                android.text.TextUtils.join("\n",scanSamples);
+        clipboard.setPrimaryClip(ClipData.newPlainText("BLE diagnóstico (revisar antes de compartir)",diagnostic));
+        inform("Diagnóstico copiado. Revísalo antes de compartirlo; puede incluir identificadores de dispositivos cercanos.");
+    }
     private void toggleScan(){
         if(scanning){stopScan();return;}
         if(!ready())return;
         scanner=bluetooth.getBluetoothLeScanner();
-        if(scanner==null){inform("No es posible iniciar el escaneo BLE.");return;}
+        if(scanner==null){inform("No fue posible iniciar el escaneo BLE.");return;}
+        bleTotal=0;bleUnique=0;scanSeen.clear();scanSamples.clear();
+        detected.setText("Preparado para buscar señales BLE cercanas.");
+        scanDetails.setText("Escaneando...");
         scanCallback=new ScanCallback(){
             @Override public void onScanResult(int callbackType,ScanResult result){
                 if(result.getScanRecord()==null)return;
-                byte[] data=FanLampCodec.payloadFromScanRecord(result.getScanRecord().getBytes());
+                byte[] raw=result.getScanRecord().getBytes();
+                if(raw==null||raw.length==0)return;
+                byte[] data=FanLampCodec.payloadFromScanRecord(raw);
                 FanLampCodec.Decoded found=FanLampCodec.decode(data);
-                if(found==null)return;
                 runOnUiThread(()->{
                     if(!scanning)return;
-                    stopScan();
-                    detected.setText("Comando encontrado: 0x"+Integer.toHexString(found.command).toUpperCase(Locale.ROOT)+" • "+found.config.version+" • ID "+FanLampCodec.hexId(found.config.id));
-                    new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("¡Se detectó un control FanLamp!")
-                        .setMessage("Puedes reutilizar el ID, seed y versión capturados para probar los botones. ¿Guardar esta configuración?")
-                        .setNegativeButton("No",null)
-                        .setPositiveButton("Usar este control",(d,w)->{
-                            config=found.config;persist();populate();inform("Control detectado cargado.");
-                        }).show();
+                    bleTotal++;
+                    String hex=FanLampCodec.hex(raw);
+                    if(scanSeen.add(hex)){
+                        bleUnique++;
+                        String observation="RSSI "+result.getRssi()+" dBm; tipos AD ["+adTypes(raw)+"]; HEX: "+hex;
+                        if(scanSamples.size()>=12)scanSamples.remove(0);
+                        scanSamples.add(observation);
+                    }
+                    detected.setText("Anuncios BLE observados: "+bleTotal+" · distintos: "+bleUnique+" · compatibles: "+(found!=null?"sí":"aún no"));
+                    if(bleUnique>0)scanDetails.setText(android.text.TextUtils.join("\n\n",scanSamples));
+                    if(found!=null){
+                        stopScan();
+                        detected.setText("Señal compatible: "+found.config.version+" ID "+FanLampCodec.hexId(found.config.id));
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Se detectó un anuncio FanLamp compatible")
+                            .setMessage("Detecté un paquete FanLamp. ¿Quieres reutilizar este ID y esta clave? Hazlo solo si procede de un control que ya maneja TU ventilador.")
+                            .setNegativeButton("No",null)
+                            .setPositiveButton("Usar datos",(d,w)->{
+                                config=found.config;persist();populate();trialProfiles=null;
+                                inform("Datos cargados desde un anuncio BLE.");
+                            }).show();
+                    }
                 });
             }
-            @Override public void onScanFailed(int error){runOnUiThread(()->{stopScan();inform("Falló el escaneo: "+error);});}
+            @Override public void onScanFailed(int error){
+                runOnUiThread(()->{stopScan();inform("Falló escaneo Android BLE: "+error);});
+            }
         };
         try{
+            scanning=true;
             scanner.startScan(null,new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),scanCallback);
-            scanning=true;inform("Escaneando BLE durante 25 segundos. Pulsa un mando Bluetooth cercano. Un teléfono puede no detectar sus propias señales.");
+            inform("Escaneando BLE durante 25 s. Pulsa algunos botones del control físico. No esperes que aparezca el ventilador.");
             handler.postDelayed(this::stopScan,25000);
-        }catch(Exception e){inform("No se pudo escanear: "+e.getMessage());}
+        }catch(Exception e){scanning=false;inform("No se pudo escanear: "+e.getMessage());}
     }
     private void stopScan(){
         if(scanning && scanner!=null && scanCallback!=null){
             try{scanner.stopScan(scanCallback);}catch(Exception ignored){}
             scanning=false;
-            inform("Escaneo terminado. Si no detectó nada, prueba con un mando externo o emparejamiento manual.");
+            inform("Escaneo finalizado: "+bleTotal+" anuncios. Que no aparezca tu mando no demuestra que esté averiado: podría no ser BLE.");
         }
     }
     private void parsePasted(){
