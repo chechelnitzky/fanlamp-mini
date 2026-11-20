@@ -57,6 +57,21 @@ public final class ScheduledBleService extends Service {
         }
         outstanding++;
         BleController.get(this).submit(ScheduleStore.operations(r),(transmitted,message)->{
+            if(transmitted){
+                android.content.SharedPreferences.Editor state=
+                    getSharedPreferences("fanlamp_home",MODE_PRIVATE).edit();
+                if(r.lightMode>=0){
+                    state.putBoolean("light_on",r.lightMode==1);
+                    if(r.lightMode==1){
+                        state.putInt("brightness",r.brightness).putInt("temperature",r.temperature);
+                    }
+                }
+                if(r.fanMode>=0){
+                    state.putInt("fan_speed",r.fanMode==1?r.speed:0);
+                    if(r.fanMode==1)state.putInt("last_speed",r.speed);
+                }
+                state.apply();
+            }
             log((transmitted?"Emitido":"Falló")+" · "+r.name+" · "+message);
             outstanding--;
             if(outstanding<=0)stopSelf();
