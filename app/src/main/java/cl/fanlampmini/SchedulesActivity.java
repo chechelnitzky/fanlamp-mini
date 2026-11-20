@@ -35,7 +35,7 @@ public final class SchedulesActivity extends Activity {
     private void render(){
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(UiKit.BG);scroll.setFillViewport(true);
         root=UiKit.column(this);root.setPadding(UiKit.dp(this,20),UiKit.dp(this,24),UiKit.dp(this,20),UiKit.dp(this,38));
-        scroll.addView(root);setContentView(scroll);
+        scroll.addView(root);setContentView(scroll);UiKit.applySafeInsets(root);
         LinearLayout header=UiKit.row(this);
         Button back=UiKit.button(this,"‹",false,this::finish);
         back.setContentDescription("Volver");header.addView(back,UiKit.lp(this,48,48));
