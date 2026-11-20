@@ -68,6 +68,24 @@ public final class UiKit {
     public static View line(Activity a){
         View v=new View(a);v.setBackgroundColor(STROKE);return v;
     }
+    /** Keeps all controls clear of Android 15/16 transparent status and navigation bars. */
+    public static void applySafeInsets(View content){
+        final int left=content.getPaddingLeft(),top=content.getPaddingTop();
+        final int right=content.getPaddingRight(),bottom=content.getPaddingBottom();
+        content.setOnApplyWindowInsetsListener((view,insets)->{
+            int safeTop,safeBottom;
+            if(android.os.Build.VERSION.SDK_INT>=30){
+                android.graphics.Insets safe=insets.getInsets(
+                    android.view.WindowInsets.Type.statusBars()|android.view.WindowInsets.Type.navigationBars());
+                safeTop=safe.top;safeBottom=safe.bottom;
+            }else{
+                safeTop=insets.getSystemWindowInsetTop();safeBottom=insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(left,top+safeTop,right,bottom+safeBottom);
+            return insets;
+        });
+        content.requestApplyInsets();
+    }
     public static void darkBars(Activity a){
         a.getWindow().setStatusBarColor(BG);a.getWindow().setNavigationBarColor(BG);
         a.getWindow().getDecorView().setSystemUiVisibility(0);
