@@ -82,11 +82,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.3.0-debug.apk
-          if gh release view v0.3.0 >/dev/null 2>&1; then
-            gh release upload v0.3.0 FanLampMini-v0.3.0-debug.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.4.0-debug.apk
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            gh release upload v0.4.0 FanLampMini-v0.4.0-debug.apk --clobber
           else
-            gh release create v0.3.0 FanLampMini-v0.3.0-debug.apk \
-              --title "FanLamp Mini v0.3.0 - Control FanLamp Pro recuperado" \
-              --notes "APK v0.3.0: reproduce los dos perfiles V3 y V1 capturados del propio FanLamp Pro, anuncia UUID16 y flags compatibles, y ofrece control de luz y 6 velocidades. La reacción física del ventilador aún debe verificarse. Basado en NicoIIT/ha-ble-adv (MIT)."
+            gh release create v0.4.0 FanLampMini-v0.4.0-debug.apk \
+              --title "FanLamp Mini v0.4.0 - Control premium y horarios" \
+              --notes "APK v0.4.0: nueva pantalla premium, dimmer y tonos cálido/neutro/frío basados en paquetes HCI, ventilador velocidades 0-6, horarios semanales luz/ventilador/ambos, servicio BLE y ajustes avanzados. Los horarios requieren teléfono encendido y alcance Bluetooth. Basado en NicoIIT/ha-ble-adv (MIT)."
           fi

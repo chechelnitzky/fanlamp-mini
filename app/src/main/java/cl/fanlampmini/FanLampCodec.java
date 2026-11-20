@@ -71,6 +71,27 @@ public final class FanLampCodec {
     public static byte[] light(Config c, boolean on) {
         return encode(c, on ? 0x10 : 0x11, 0,0,0,0);
     }
+    /**
+     * CWW light color/intensity from the real HCI 0x21 packets and upstream
+     * FanLamp Pro translator: arg1=COOL,arg2=WARM for V2/V3, arg0=COOL,arg1=WARM for V1.
+     * Each channel is an independent 0..255 intensity.
+     */
+    public static byte[] lightCww(Config c, int cool, int warm) {
+        if (cool<0 || cool>255 || warm<0 || warm>255)
+            throw new IllegalArgumentException("Los canales de luz deben estar entre 0 y 255");
+        if (c.version==Version.V1) return encode(c,0x21,cool,warm,0,0);
+        return encode(c,0x21,0,cool,warm,0);
+    }
+    public static byte[] lightLevel(Config c, int brightnessPercent, int temperature) {
+        if (brightnessPercent<1 || brightnessPercent>100 || temperature<0 || temperature>2)
+            throw new IllegalArgumentException("Brillo 1–100 y temperatura 0–2");
+        int level=Math.max(1,Math.min(255,Math.round(brightnessPercent*255f/100f)));
+        // 0 warm, 1 neutral, 2 cool. A neutral 100% command uses 255+255,
+        // observed twice in the captured original app, not a half-brightness mix.
+        int cool=temperature==0?0:level;
+        int warm=temperature==2?0:level;
+        return lightCww(c,cool,warm);
+    }
     public static byte[] fan(Config c, int speed) {
         if (speed < 0 || speed > 6) throw new IllegalArgumentException("Velocidad inválida");
         if (c.version==Version.V1)
