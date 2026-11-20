@@ -1,0 +1,86 @@
+name: Compilar APK FanLamp Mini
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Recuperar fuente Android verificada (primera ejecución)
+        shell: bash
+        run: |
+          if test -f bundle/part01.txt; then
+            cat bundle/part01.txt bundle/part02.txt bundle/part03.txt bundle/part04.txt bundle/part04b.txt bundle/part05.txt | base64 --decode > /tmp/fanlamp-source.tar.xz
+            echo "645c3267e50f03750b289da3a8d6b5cbf8b752c17d476681e952355c42e279d2  /tmp/fanlamp-source.tar.xz" | sha256sum --check
+            tar -xJf /tmp/fanlamp-source.tar.xz
+          fi
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Android 35
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configurar Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Comprobar vectores oficiales Bluetooth v1, v2 y v3
+        run: |
+          mkdir -p tests/build
+          javac -d tests/build app/src/main/java/cl/fanlampmini/FanLampCodec.java tests/CodecSelfTest.java
+          java -cp tests/build CodecSelfTest
+
+      - name: Compilar APK debug
+        run: gradle --no-daemon assembleDebug
+
+      - name: Entregar APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: FanLampMini-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publicar código fuente editable en el repositorio
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: bash
+        run: |
+          if test -d bundle; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .gitignore app build.gradle settings.gradle gradle.properties
+            git rm -r bundle
+            git commit -m "Publicar fuentes Android editables de FanLamp Mini"
+            git push origin HEAD:main
+          fi
+
+      - name: Publicar APK de descarga directa en GitHub Releases
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.1.0-debug.apk
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            gh release upload v0.1.0 FanLampMini-v0.1.0-debug.apk --clobber
+          else
+            gh release create v0.1.0 FanLampMini-v0.1.0-debug.apk \
+              --title "FanLamp Mini v0.1.0 - Prueba BLE" \
+              --notes "APK Android experimental de control Bluetooth sin horarios. Basado en NicoIIT/ha-ble-adv (MIT). Protocolos codificados y probados con vectores; control real de ventilador aún no verificado."
+          fi
