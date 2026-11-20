@@ -63,30 +63,54 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publicar código fuente editable en el repositorio
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        shell: bash
-        run: |
-          if test -d bundle; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .gitignore app build.gradle settings.gradle gradle.properties
-            git rm -r bundle
-            git commit -m "Publicar fuentes Android editables de FanLamp Mini"
-            git push origin HEAD:main
-          fi
-
-      - name: Publicar APK de descarga directa en GitHub Releases
+      # Never publish an ephemeral debug-signed APK: each runner creates its own key.
+      - name: Preparar la firma de actualización estable
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         shell: bash
         env:
+          FANLAMP_KEYSTORE_B64: ${{ secrets.FANLAMP_KEYSTORE_B64 }}
+          FANLAMP_KEYSTORE_PASSWORD: ${{ secrets.FANLAMP_KEYSTORE_PASSWORD }}
+        run: |
+          if test -n "$FANLAMP_KEYSTORE_B64" && test -n "$FANLAMP_KEYSTORE_PASSWORD"; then
+            printf '%s' "$FANLAMP_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/fanlamp-update.p12"
+            chmod 600 "$RUNNER_TEMP/fanlamp-update.p12"
+            echo 'SIGN_READY=true' >> "$GITHUB_ENV"
+          else
+            echo 'SIGN_READY=false' >> "$GITHUB_ENV"
+            echo '::notice::Se omitió la publicación: configura los secretos de firma estables en GitHub Actions.'
+          fi
+
+      - name: Compilar APK release sin firma
+        if: env.SIGN_READY == 'true'
+        run: gradle --no-daemon assembleRelease
+
+      - name: Firmar y verificar certificado estable
+        if: env.SIGN_READY == 'true'
+        shell: bash
+        env:
+          FANLAMP_KEYSTORE_PASSWORD: ${{ secrets.FANLAMP_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          SIGNER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/apksigner"
+          "$SIGNER" sign --ks "$RUNNER_TEMP/fanlamp-update.p12" \
+            --ks-type PKCS12 --ks-key-alias fanlamp-mini \
+            --ks-pass env:FANLAMP_KEYSTORE_PASSWORD \
+            --out FanLampMini-v0.5.0.apk app/build/outputs/apk/release/app-release-unsigned.apk
+          "$SIGNER" verify --verbose --print-certs FanLampMini-v0.5.0.apk | tee /tmp/fanlamp-signature-report.txt
+          grep -Eiq 'f04ff09bb97592ee9d4dd92b6a869bf7040e50eb98b064a775c3cb037000f1d7' /tmp/fanlamp-signature-report.txt || {
+            echo 'ERROR: La firma no coincide con la clave de actualización oficial de FanLamp Mini 0.5.'; exit 1;
+          }
+          rm -f "$RUNNER_TEMP/fanlamp-update.p12"
+
+      - name: Publicar únicamente la APK firmada con certificado persistente
+        if: env.SIGN_READY == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk FanLampMini-v0.4.0-debug.apk
-          if gh release view v0.4.0 >/dev/null 2>&1; then
-            gh release upload v0.4.0 FanLampMini-v0.4.0-debug.apk --clobber
+          if gh release view v0.5.0 >/dev/null 2>&1; then
+            gh release upload v0.5.0 FanLampMini-v0.5.0.apk --clobber
           else
-            gh release create v0.4.0 FanLampMini-v0.4.0-debug.apk \
-              --title "FanLamp Mini v0.4.0 - Control premium y horarios" \
-              --notes "APK v0.4.0: nueva pantalla premium, dimmer y tonos cálido/neutro/frío basados en paquetes HCI, ventilador velocidades 0-6, horarios semanales luz/ventilador/ambos, servicio BLE y ajustes avanzados. Los horarios requieren teléfono encendido y alcance Bluetooth. Basado en NicoIIT/ha-ble-adv (MIT)."
+            gh release create v0.5.0 FanLampMini-v0.5.0.apk \
+              --title 'FanLamp Mini v0.5.0 – Control en una pantalla' \
+              --notes 'Interfaz sin desplazamiento vertical y firma de actualización persistente. Los horarios, el dimmer y las velocidades siguen disponibles.'
           fi

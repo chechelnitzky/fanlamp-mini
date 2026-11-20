@@ -77,42 +77,45 @@ public final class HomeActivity extends Activity {
         return new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1);
     }
     private void draw(){
-        ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(true);scroll.setBackgroundColor(UiKit.BG);
+        // v0.5: everything fits in ONE view. No ScrollView and no vertical swiping.
         LinearLayout root=UiKit.column(this);
-        root.setPadding(UiKit.dp(this,20),UiKit.dp(this,22),UiKit.dp(this,20),UiKit.dp(this,38));
-        scroll.addView(root);setContentView(scroll);UiKit.applySafeInsets(root);
+        root.setBackgroundColor(UiKit.BG);
+        root.setPadding(UiKit.dp(this,14),UiKit.dp(this,7),UiKit.dp(this,14),UiKit.dp(this,7));
+        setContentView(root);UiKit.applySafeInsets(root);
 
         LinearLayout head=UiKit.row(this);
         LinearLayout words=UiKit.column(this);
-        words.addView(UiKit.label(this,"FANLAMP MINI  /  HOGAR",11,UiKit.MINT,true));
-        words.addView(UiKit.title(this,"Tu ambiente.",31));
+        words.addView(UiKit.label(this,"FANLAMP MINI",10,UiKit.MINT,true));
+        words.addView(UiKit.title(this,"Tu ambiente.",24));
         head.addView(words,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         Button gear=UiKit.button(this,"⚙",false,()->startActivity(new Intent(this,MainActivity.class)));
         gear.setContentDescription("Ajustes avanzados Bluetooth");
-        head.addView(gear,UiKit.lp(this,52,48));
+        head.addView(gear,UiKit.lp(this,45,39));
         root.addView(head);
 
-        feedback=UiKit.label(this,"Bluetooth LE · Órdenes sin confirmación del receptor",12,UiKit.SUB,false);
-        root.addView(feedback,full(12));
-        root.addView(UiKit.label(this,"Iluminación",21,UiKit.TEXT,true),full(28));
-        LinearLayout light=UiKit.card(this);root.addView(light,full(11));
+        feedback=UiKit.label(this,"Bluetooth listo · Control local",11,UiKit.SUB,false);
+        feedback.setSingleLine(true);
+        feedback.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        root.addView(feedback,full(5));
+        LinearLayout light=UiKit.card(this);
+        light.setPadding(UiKit.dp(this,13),UiKit.dp(this,10),UiKit.dp(this,13),UiKit.dp(this,10));
+        root.addView(light,full(7));
         LinearLayout lightHeader=UiKit.row(this);
         LinearLayout lightText=UiKit.column(this);
         lightText.addView(UiKit.label(this,"LUZ",11,UiKit.MINT,true));
-        lightStatus=UiKit.label(this,"Último ajuste guardado",15,UiKit.TEXT,true);
+        lightStatus=UiKit.label(this,"Último ajuste guardado",13,UiKit.TEXT,true);
         lightText.addView(lightStatus);
         lightHeader.addView(lightText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         lightPower=UiKit.button(this,"",true,this::toggleLight);
         lightPower.setContentDescription("Encender o apagar la luz");
-        lightHeader.addView(lightPower,UiKit.lp(this,110,44));
+        lightHeader.addView(lightPower,UiKit.lp(this,94,36));
         light.addView(lightHeader);
 
         LinearLayout dimTitle=UiKit.row(this);
         dimTitle.addView(UiKit.label(this,"Intensidad",14,UiKit.SUB,false),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         brightValue=UiKit.title(this,""+brightness+"%",16);
         dimTitle.addView(brightValue);
-        light.addView(dimTitle,full(24));
+        light.addView(dimTitle,full(8));
         SeekBar bar=UiKit.slider(this,brightness);
         bar.setMin(1);
         bar.setContentDescription("Control de intensidad de la luz");
@@ -127,35 +130,40 @@ public final class HomeActivity extends Activity {
                 BleController.get(HomeActivity.this).lightLevel(brightness,temperature,HomeActivity.this::result);
             }
         });
-        light.addView(bar,full(3));
-        light.addView(UiKit.label(this,"Temperatura de luz",14,UiKit.SUB,false),full(18));
+        light.addView(bar,full(0));
+        light.addView(UiKit.label(this,"Temperatura de luz",12,UiKit.SUB,false),full(2));
         LinearLayout choice=UiKit.row(this);
         String[] modes={"Cálida","Neutra","Fría"};
         for(int i=0;i<3;i++){
             final int mode=i;
             Button b=UiKit.button(this,modes[i],false,()->selectTemp(mode));
             tempButtons[i]=b;
-            LinearLayout.LayoutParams p=weight();p.setMargins(UiKit.dp(this,3),0,UiKit.dp(this,3),0);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,UiKit.dp(this,34),1);
+            p.setMargins(UiKit.dp(this,3),0,UiKit.dp(this,3),0);
             choice.addView(b,p);
         }
-        light.addView(choice,full(9));
+        light.addView(choice,full(4));
 
-        root.addView(UiKit.label(this,"Ventilador",21,UiKit.TEXT,true),full(25));
-        LinearLayout fan=UiKit.card(this);root.addView(fan,full(11));
+        LinearLayout fan=UiKit.card(this);
+        fan.setPadding(UiKit.dp(this,13),UiKit.dp(this,10),UiKit.dp(this,13),UiKit.dp(this,10));
+        LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1);
+        fp.topMargin=UiKit.dp(this,8);
+        root.addView(fan,fp);
         LinearLayout fanHeader=UiKit.row(this);
         LinearLayout fanText=UiKit.column(this);
         fanText.addView(UiKit.label(this,"VENTILADOR",11,UiKit.MINT,true));
-        fanStatus=UiKit.label(this,"Velocidad 0 / 6",15,UiKit.TEXT,true);fanText.addView(fanStatus);
+        fanStatus=UiKit.label(this,"Velocidad 0 / 6",13,UiKit.TEXT,true);fanText.addView(fanStatus);
         fanHeader.addView(fanText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         fanPower=UiKit.button(this,"",true,this::toggleFan);
-        fanHeader.addView(fanPower,UiKit.lp(this,110,44));
+        fanHeader.addView(fanPower,UiKit.lp(this,94,36));
         fan.addView(fanHeader);
         dial=new FanDialView(this);
         dial.setSpeed(fanSpeed);
         dial.setListener(this::selectSpeed);
         dial.setContentDescription("Selector circular de velocidades 0 a 6");
-        LinearLayout.LayoutParams d=UiKit.lp(this,ViewGroup.LayoutParams.MATCH_PARENT,300);
-        d.topMargin=UiKit.dp(this,14);fan.addView(dial,d);
+        LinearLayout.LayoutParams d=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1);
+        d.topMargin=UiKit.dp(this,1);
+        fan.addView(dial,d);
 
         LinearLayout chips=UiKit.row(this);
         for(int i=0;i<=6;i++){
@@ -163,23 +171,19 @@ public final class HomeActivity extends Activity {
             Button b=UiKit.button(this,String.valueOf(i),false,()->selectSpeed(speed));
             b.setContentDescription(i==0?"Apagar ventilador":"Velocidad "+i);
             speedButtons[i]=b;
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,UiKit.dp(this,40),1);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,UiKit.dp(this,32),1);
             p.setMargins(UiKit.dp(this,2),0,UiKit.dp(this,2),0);chips.addView(b,p);
         }
         fan.addView(chips);
 
-        LinearLayout nextHeader=UiKit.row(this);
-        nextHeader.addView(UiKit.label(this,"Automatizaciones",21,UiKit.TEXT,true),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
-        Button all=UiKit.button(this,"Ver horarios",false,()->startActivity(new Intent(this,SchedulesActivity.class)));
-        nextHeader.addView(all,UiKit.lp(this,126,42));
-        root.addView(nextHeader,full(27));
-        LinearLayout schedule=UiKit.card(this);root.addView(schedule,full(12));
-        schedulesPreview=UiKit.label(this,"Sin horarios programados",14,UiKit.SUB,false);
-        schedule.addView(schedulesPreview);
-        Button add=UiKit.button(this,"+ Crear un horario",true,()->startActivity(new Intent(this,ScheduleEditorActivity.class)));
-        schedule.addView(add,full(15));
-        TextView note=UiKit.label(this,"Los controles muestran la última orden guardada, no el estado físico del dispositivo. El teléfono debe estar encendido y dentro del alcance Bluetooth para los horarios.",12,UiKit.SUB,false);
-        root.addView(note,full(22));
+        // Compact schedules entry stays visible at the bottom, even on smaller phones.
+        schedulesPreview=UiKit.label(this,"",12,UiKit.SUB,false);
+        schedulesPreview.setSingleLine(true);
+        schedulesPreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        root.addView(schedulesPreview,full(5));
+        Button schedules=UiKit.button(this,"◷   Horarios y automatizaciones",true,
+            ()->startActivity(new Intent(this,SchedulesActivity.class)));
+        root.addView(schedules,UiKit.lp(this,ViewGroup.LayoutParams.MATCH_PARENT,40));
         refreshLight();refreshFan();refreshSchedules();
     }
     private void result(boolean transmitted,String msg){
@@ -234,16 +238,14 @@ public final class HomeActivity extends Activity {
     private void refreshSchedules(){
         if(schedulesPreview==null)return;
         List<ScheduleStore.Rule> all=ScheduleStore.all(this);
-        if(all.isEmpty()){schedulesPreview.setText("Sin horarios programados. Puedes combinar la luz y el ventilador.");return;}
-        StringBuilder s=new StringBuilder();
-        int shown=0;
-        for(ScheduleStore.Rule r:all)if(r.enabled&&shown<3){
-            if(s.length()>0)s.append("\n\n");
-            s.append(ScheduleStore.time(r)).append(" · ").append(r.name).append("\n")
-                .append(ScheduleStore.days(r)).append(" · ").append(ScheduleStore.summary(r));
-            shown++;
+        if(all.isEmpty()){schedulesPreview.setText("Horarios · Sin automatizaciones activas");return;}
+        int active=0;String closest="";
+        for(ScheduleStore.Rule r:all)if(r.enabled){
+            active++;
+            if(closest.isEmpty())closest=ScheduleStore.time(r)+" · "+r.name;
         }
-        schedulesPreview.setText(s.length()>0?s.toString():"Todos tus horarios están pausados.");
+        schedulesPreview.setText(active==0?"Horarios · Todos pausados":
+            active+" horario"+(active==1?"":"s")+" activo"+(active==1?"":"s")+"  ·  "+closest);
     }
     @Override protected void onResume(){
         super.onResume();
