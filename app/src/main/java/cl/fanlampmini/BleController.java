@@ -103,6 +103,10 @@ public final class BleController {
         }
         Operation op=active.ops.get(active.next);
         try{
+            // Advanced settings may transmit using a different sender. Reload the
+            // shared counters before encoding, avoiding stale sequence values.
+            v3.txCount=prefs.getInt("captured_tx_v3",v3.txCount)&255;
+            v1.txCount=prefs.getInt("captured_tx_v1",v1.txCount)&255;
             // Genuine V1 packets vary the per-command 8-bit seed; V3 uses its stable seed.
             v1.seed=1+random.nextInt(255);
             byte[] first=encode(v3,op),second=encode(v1,op);
